@@ -65,10 +65,21 @@ class AxiPwmCtrl:
     def __init__(self, drv, debug=False):
         self.debug = debug
         self.drv = drv
-        self.max_count = 0xFFFF # Count up to this value for one period.
+
+        # This determines the period. Don't set it too long (big value)
+        # since we're actually PWMing the DC input of the fan.
+        self.max_count = 0xFF # Count up to this value for one period.
 
     def configure(self, duty_cycle_percent):
         self.stop()
+
+        # The counter value corresponds to the "off" rather than on time.
+        duty_cycle_percent = 1.0 - duty_cycle_percent
+
+        if duty_cycle_percent < 0.6:
+            print("The built in fan will likely stall below 0.6 duty.")
+            print("0.6 will be used instead.")
+            duty_cycle_percent = 0.6
 
         ccr = self._read(TCSR0_OF)
         ccr = _set(ccr, TCSR_UDT | TCSR_ARHT)
@@ -126,6 +137,7 @@ class AxiPwmCtrl:
         high = _set(ccr, TCSR_LOAD)
         self._write(TCSR1_OF, high)
         self._write(TCSR1_OF, ccr)
+
 
     def _read(self, offset):
         if self.debug:
