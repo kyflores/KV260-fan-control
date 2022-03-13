@@ -73,71 +73,49 @@ class AxiPwmCtrl:
     def configure(self, duty_cycle_percent):
         self.stop()
 
-        # The counter value corresponds to the "off" rather than on time.
-        duty_cycle_percent = 1.0 - duty_cycle_percent
-
         if duty_cycle_percent < 0.6:
             print("The built in fan will likely stall below 0.6 duty.")
             print("0.6 will be used instead.")
             duty_cycle_percent = 0.6
 
-        ccr = self._read(TCSR0_OF)
-        ccr = _set(ccr, TCSR_UDT | TCSR_ARHT)
-        ccr = _unset(ccr, TCSR_CASC | TCSR_GENT)
-        self._write(TCSR0_OF, ccr)
+        # The counter value corresponds to the "off" rather than on time.
+        duty_cycle_percent = 1.0 - duty_cycle_percent
 
-        ccr = self._read(TCSR1_OF)
-        ccr = _set(ccr, TCSR_UDT | TCSR_ARHT)
-        ccr = _unset(ccr, TCSR_CASC | TCSR_GENT)
-        self._write(TCSR1_OF, ccr)
+        self.mut_reg_bits(TCSR0_OF, TCSR_UDT | TCSR_ARHT, TCSR_CASC | TCSR_GENT)
+        self.mut_reg_bits(TCSR1_OF, TCSR_UDT | TCSR_ARHT, TCSR_CASC | TCSR_GENT)
 
         self._write(TLR0_OF, self.max_count)
         self._write(TLR1_OF, int(self.max_count * duty_cycle_percent))
 
-        ccr = self._read(TCSR0_OF)
-        ccr = _unset(ccr, TCSR_CAPT)
-        self._write(TCSR0_OF, ccr)
+        self.mut_reg_bits(TCSR0_OF, 0, TCSR_CAPT)
+        self.mut_reg_bits(TCSR1_OF, 0, TCSR_CAPT)
 
-        ccr = self._read(TCSR1_OF)
-        ccr = _unset(ccr, TCSR_CAPT)
-        self._write(TCSR1_OF, ccr)
 
     def start(self):
-        ccr = self._read(TCSR0_OF)
-        ccr = _set(ccr, TCSR_PWMA | TCSR_GENT)
-        self._write(TCSR0_OF, ccr)
-
-        ccr = self._read(TCSR1_OF)
-        ccr = _set(ccr, TCSR_PWMA | TCSR_GENT)
-        self._write(TCSR1_OF, ccr)
+        self.mut_reg_bits(TCSR0_OF, TCSR_PWMA | TCSR_GENT, 0)
+        self.mut_reg_bits(TCSR1_OF, TCSR_PWMA | TCSR_GENT, 0)
 
         self.reset_counts()
 
         # Set enable all bit
-        ccr = self._read(TCSR0_OF)
-        ccr = _set(ccr, TCSR_ENALL)
-        self._write(TCSR0_OF, ccr)
+        self.mut_reg_bits(TCSR0_OF, TCSR_ENALL, 0)
 
     def stop(self):
-        ccr = self._read(TCSR0_OF)
-        ccr = _set(ccr, TCSR_ENT)
-        self._write(TCSR0_OF, ccr)
-
-        ccr = self._read(TCSR1_OF)
-        ccr = _set(ccr, TCSR_ENT)
-        self._write(TCSR1_OF, ccr)
+        self.mut_reg_bits(TCSR0_OF, 0, TCSR_ENT)
+        self.mut_reg_bits(TCSR1_OF, 0, TCSR_ENT)
 
     def reset_counts(self):
-        ccr = self._read(TCSR0_OF)
-        high = _set(ccr, TCSR_LOAD)
-        self._write(TCSR0_OF, high)
-        self._write(TCSR0_OF, ccr)
+        self.mut_reg_bits(TCSR0_OF, TCSR_LOAD, 0)
+        self.mut_reg_bits(TCSR0_OF, 0, TCSR_LOAD)
 
-        ccr = self._read(TCSR1_OF)
-        high = _set(ccr, TCSR_LOAD)
-        self._write(TCSR1_OF, high)
-        self._write(TCSR1_OF, ccr)
+        self.mut_reg_bits(TCSR1_OF, TCSR_LOAD, 0)
+        self.mut_reg_bits(TCSR1_OF, 0, TCSR_LOAD)
 
+    def mut_reg_bits(self, offset, set_mask, unset_mask):
+        reg = self._read(offset)
+        reg = _set(reg, set_mask)
+        reg = _unset(reg, unset_mask)
+        self._write(offset, reg)
 
     def _read(self, offset):
         if self.debug:
@@ -152,10 +130,10 @@ class AxiPwmCtrl:
         return self.drv.write(offset, value)
 
 if __name__ == '__main__':
-    overlay = Overlay('../kv260_fanctrl.bit')
+    overlay = Overlay('../bit/kv260_fanctrl.bit')
     pwm = AxiPwmCtrl(overlay.fan_pwm_ctrl, debug=True)
 
-    # Briefly set the fan to full speed to overcome stall
+    # Briefly set the fan to a high speed  to overcome stall
     pwm.configure(0.0)
     pwm.start()
 
